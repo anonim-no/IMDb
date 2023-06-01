@@ -15,6 +15,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.example.imdb.MoviesApplication
 import com.example.imdb.ui.poster.PosterActivity
 import com.example.imdb.R
 import com.example.imdb.domain.models.Movie
@@ -29,6 +30,8 @@ class MoviesActivity : Activity(), MoviesView {
         private const val CLICK_DEBOUNCE_DELAY = 1000L
     }
 
+    private var moviesSearchPresenter: MoviesSearchPresenter? = null
+
     private val adapter = MoviesAdapter {
         if (clickDebounce()) {
             val intent = Intent(this, PosterActivity::class.java)
@@ -37,7 +40,7 @@ class MoviesActivity : Activity(), MoviesView {
         }
     }
 
-    private var moviesSearchPresenter : MoviesSearchPresenter? = null
+
 
     override fun render(state: MoviesState) {
         when (state) {
@@ -94,17 +97,28 @@ class MoviesActivity : Activity(), MoviesView {
 
     private var textWatcher: TextWatcher? = null
 
+    override fun onStart() {
+        super.onStart()
+        moviesSearchPresenter?.attachView(this)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        moviesSearchPresenter?.attachView(this)
+    }
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_movies)
 
-        moviesSearchPresenter = lastNonConfigurationInstance as? MoviesSearchPresenter
+        moviesSearchPresenter = (this.application as? MoviesApplication)?.moviesSearchPresenter
+
         if (moviesSearchPresenter == null) {
             moviesSearchPresenter = Creator.provideMoviesSearchPresenter(
-                moviesView = this,
-                context = this,
+                context = this.applicationContext,
             )
+            (this.application as? MoviesApplication)?.moviesSearchPresenter = moviesSearchPresenter
         }
 
 
@@ -134,10 +148,32 @@ class MoviesActivity : Activity(), MoviesView {
 
     }
 
+    override fun onPause() {
+        super.onPause()
+        moviesSearchPresenter?.detachView()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        moviesSearchPresenter?.detachView()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        moviesSearchPresenter?.detachView()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+
         textWatcher?.let { queryInput.removeTextChangedListener(it) }
+        moviesSearchPresenter?.detachView()
         moviesSearchPresenter?.onDestroy()
+
+        if (isFinishing()) {
+            // Очищаем ссылку на Presenter в Application
+            (this.application as? MoviesApplication)?.moviesSearchPresenter = null
+        }
     }
 
     override fun onRetainNonConfigurationInstance(): Any? {
