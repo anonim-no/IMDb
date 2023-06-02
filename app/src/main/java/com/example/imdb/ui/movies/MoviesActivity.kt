@@ -1,7 +1,6 @@
 package com.example.imdb.ui.movies
 
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
@@ -15,7 +14,6 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.example.imdb.MoviesApplication
 import com.example.imdb.ui.poster.PosterActivity
 import com.example.imdb.R
 import com.example.imdb.domain.models.Movie
@@ -23,14 +21,15 @@ import com.example.imdb.presentation.movies.MoviesSearchPresenter
 import com.example.imdb.presentation.movies.MoviesView
 import com.example.imdb.ui.movies.models.MoviesState
 import com.example.imdb.util.Creator
+import moxy.MvpActivity
+import moxy.presenter.InjectPresenter
+import moxy.presenter.ProvidePresenter
 
-class MoviesActivity : Activity(), MoviesView {
+class MoviesActivity : MvpActivity(), MoviesView {
 
     companion object {
         private const val CLICK_DEBOUNCE_DELAY = 1000L
     }
-
-    private var moviesSearchPresenter: MoviesSearchPresenter? = null
 
     private val adapter = MoviesAdapter {
         if (clickDebounce()) {
@@ -40,7 +39,15 @@ class MoviesActivity : Activity(), MoviesView {
         }
     }
 
+    @InjectPresenter
+    lateinit var moviesSearchPresenter: MoviesSearchPresenter
 
+    @ProvidePresenter
+    fun providePresenter(): MoviesSearchPresenter {
+        return Creator.provideMoviesSearchPresenter(
+            context = this.applicationContext,
+        )
+    }
 
     override fun render(state: MoviesState) {
         when (state) {
@@ -88,8 +95,6 @@ class MoviesActivity : Activity(), MoviesView {
 
     private val handler = Handler(Looper.getMainLooper())
 
-
-
     private lateinit var queryInput: EditText
     private lateinit var placeholderMessage: TextView
     private lateinit var moviesList: RecyclerView
@@ -97,30 +102,10 @@ class MoviesActivity : Activity(), MoviesView {
 
     private var textWatcher: TextWatcher? = null
 
-    override fun onStart() {
-        super.onStart()
-        moviesSearchPresenter?.attachView(this)
-    }
-
-    override fun onResume() {
-        super.onResume()
-        moviesSearchPresenter?.attachView(this)
-    }
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_movies)
-
-        moviesSearchPresenter = (this.application as? MoviesApplication)?.moviesSearchPresenter
-
-        if (moviesSearchPresenter == null) {
-            moviesSearchPresenter = Creator.provideMoviesSearchPresenter(
-                context = this.applicationContext,
-            )
-            (this.application as? MoviesApplication)?.moviesSearchPresenter = moviesSearchPresenter
-        }
-
 
         placeholderMessage = findViewById(R.id.placeholderMessage)
         queryInput = findViewById(R.id.queryInput)
@@ -135,7 +120,7 @@ class MoviesActivity : Activity(), MoviesView {
             }
 
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                moviesSearchPresenter?.searchDebounce(
+                moviesSearchPresenter.searchDebounce(
                     changedText = s?.toString() ?: ""
                 )
             }
@@ -148,35 +133,15 @@ class MoviesActivity : Activity(), MoviesView {
 
     }
 
-    override fun onPause() {
-        super.onPause()
-        moviesSearchPresenter?.detachView()
-    }
-
-    override fun onStop() {
-        super.onStop()
-        moviesSearchPresenter?.detachView()
-    }
-
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        moviesSearchPresenter?.detachView()
-    }
-
     override fun onDestroy() {
         super.onDestroy()
 
         textWatcher?.let { queryInput.removeTextChangedListener(it) }
-        moviesSearchPresenter?.detachView()
-        moviesSearchPresenter?.onDestroy()
+        moviesSearchPresenter.onDestroy()
 
-        if (isFinishing()) {
-            // Очищаем ссылку на Presenter в Application
-            (this.application as? MoviesApplication)?.moviesSearchPresenter = null
-        }
     }
 
-    override fun onRetainNonConfigurationInstance(): Any? {
+    override fun onRetainNonConfigurationInstance(): Any {
         return moviesSearchPresenter
     }
 
